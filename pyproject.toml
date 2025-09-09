@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "serdes-cookbook"
+version = "0.0.1"
+description = "WIP Cookbook for wireline SERDES"
+authors = [{name = "Sunjin Choi", email = "sunjin_choi@berkeley.edu"}]
+dependencies = [
+    "typing_extensions",
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "numba",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["tests*", "docs*"]
+
+
