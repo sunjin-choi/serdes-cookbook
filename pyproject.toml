@@ -13,6 +13,7 @@ dependencies = [
     "scipy",
     "matplotlib",
     "numba",
+    "scikit-rf",
 ]
 
 [tool.setuptools.packages.find]
