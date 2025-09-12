@@ -114,8 +114,82 @@ class ChannelTF:
         f, H = four_port_to_diff(self.network, self.Zs, self.Zl)
         return f, H
 
+def freq2impulse(H: np.ndarray, f: np.ndarray):
+    """
+    Convert a one-sided complex frequency response H(f) (DC..Nyquist, inclusive)
+    sampled on a uniformly spaced grid 'f' into a real impulse response h(t) and its time axis t.
+
+    Assumptions
+    ----------
+    - H is the ONE-SIDED spectrum for a REAL impulse response:
+        bins 0..N/2 (inclusive), where N is the desired IFFT length (N even).
+      That is, len(H) == N/2 + 1.
+    - f[0] == 0, f is uniformly spaced with spacing df = f[1] - f[0].
+    - The last frequency is the Nyquist: f[-1] == Fs/2, where Fs = N * df.
+
+    Returns
+    -------
+    h : (N,) ndarray, real
+        Impulse response (time-domain).
+    t : (N,) ndarray, float
+        Time axis in seconds: t = np.arange(N) / Fs.
+
+    Notes
+    -----
+    If you only have a *two-sided* spectrum already, just call:
+        h = np.fft.ifft(H_full)
+    and build t from your known sampling rate.
+
+    If your input H does NOT include the Nyquist bin, pad it first or
+    pass through a helper that upgrades it to len(H) == N/2 + 1.
+    """
+    H = np.asarray(H)
+    f = np.asarray(f)
+
+    if H.ndim != 1 or f.ndim != 1:
+        raise ValueError("H and f must be 1D arrays.")
+
+    if len(H) != len(f):
+        raise ValueError("H and f must have the same length.")
+
+    if len(H) < 2:
+        raise ValueError("Need at least two frequency points (DC and one more).")
+
+    # Check uniform spacing
+    df = f[1] - f[0]
+    if not np.allclose(np.diff(f), df, rtol=1e-10, atol=1e-12):
+        raise ValueError("Frequency vector f must be uniformly spaced.")
+
+    # Check DC ~ 0
+    if not np.isclose(f[0], 0.0, rtol=0, atol=1e-12):
+        raise ValueError("First frequency must be DC (0 Hz).")
+
+    # Deduce N from one-sided spectrum length: len(H) == N/2 + 1  ->  N = 2*(len(H)-1)
+    N = 2 * (len(H) - 1)
+    if N <= 0 or N % 2 != 0:
+        raise ValueError("len(H) must correspond to a valid one-sided spectrum (N even, N=2*(len(H)-1) > 0).")
+
+    # Sampling rate Fs implied by df and N: Fs = N * df
+    Fs = N * df
+    nyq_expected = Fs / 2.0
+
+    # Sanity: the last frequency should be Nyquist (allow tiny float error)
+    if not np.isclose(f[-1], nyq_expected, rtol=1e-10, atol=1e-12):
+        raise ValueError(
+            f"Last frequency should be Nyquist = Fs/2 = {nyq_expected:.6g} Hz, got {f[-1]:.6g} Hz. "
+            "Your H must be one-sided and include the Nyquist bin."
+        )
+
+    # irfft understands one-sided real spectrum and returns a real h of length N
+    h = np.fft.irfft(H, n=N)
+
+    # Time axis
+    t = np.arange(N) / Fs
+    return h, t
+
 if __name__ == "__main__":
-    example_s4p = "../example_channel/Tp0_Tp5_28p5db_FQSFP_thru.s4p"
+    # example_s4p = "../example_channel/Tp0_Tp5_28p5db_FQSFP_thru.s4p"
+    example_s4p = "../example_channel/CA_19p75dB_thru.s4p"
     channel_name = example_s4p.split("/")[-1].split(".s4p")[0]
     port_def = np.array([[0, 1], [2, 3]])
     Zs = 50
@@ -165,5 +239,16 @@ if __name__ == "__main__":
     plt.title(f"Channel: {channel_name}")
     plt.grid(which="both", linestyle="--", alpha=0.6)
     plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+    # # Impulse response
+    h, t = freq2impulse(H, f)
+    plt.figure()
+    plt.plot(t * 1e9, h)
+    plt.xlabel("Time (ns)")
+    plt.ylabel("Impulse Response")
+    plt.title(f"Channel Impulse Response: {channel_name}")
+    plt.grid(linestyle="--", alpha=0.6)
     plt.tight_layout()
     plt.show()
